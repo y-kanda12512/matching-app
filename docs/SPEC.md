@@ -8,10 +8,10 @@
 
 | 項目 | 技術 |
 |------|------|
-| フレームワーク | Next.js 15 (App Router) |
+| フレームワーク | Next.js (App Router) |
 | 言語 | TypeScript |
 | スタイリング | Tailwind CSS v4 |
-| バックエンド/DB | Supabase (Auth, PostgreSQL, Realtime) |
+| バックエンド/DB | Firebase (Auth, Firestore, Storage) |
 | デプロイ | Vercel（想定） |
 
 ---
@@ -23,14 +23,14 @@
 ### Phase 1: プロジェクト初期セットアップ
 
 - Next.js + TypeScript + Tailwind CSS のプロジェクト作成
-- Supabase クライアント設定
+- Firebase クライアント設定
 - 共通レイアウト（ヘッダー、ナビゲーション）
 
 ### Phase 2: 認証機能
 
 - メールアドレス + パスワードによるサインアップ
 - ログイン / ログアウト
-- 認証状態によるページ保護（ミドルウェア）
+- 認証状態の管理（AuthContext）
 - 認証関連のUIページ（ログイン画面、サインアップ画面）
 
 ### Phase 3: プロフィール機能
@@ -41,7 +41,7 @@
   - 自己紹介文（任意）
   - 年齢（必須）
   - 性別（必須）
-  - プロフィール画像（Supabase Storage）
+  - プロフィール画像（Firebase Storage）
 - プロフィール表示画面
 
 ### Phase 4: ユーザー一覧・いいね機能
@@ -62,60 +62,55 @@
 
 - マッチした相手とのメッセージ画面
 - メッセージの送信・受信
-- Supabase Realtime によるリアルタイム更新
+- Firestore のリアルタイムリスナーによるリアルタイム更新
 - メッセージ一覧（トーク一覧）画面
 - 未読メッセージの表示
 
 ---
 
-## データベース設計
+## Firestore データ構造
 
-### profiles テーブル
+### users コレクション
 
-| カラム | 型 | 説明 |
-|--------|------|------|
-| id | uuid (PK) | auth.users.id と一致 |
-| nickname | text | ニックネーム |
-| bio | text | 自己紹介 |
-| age | integer | 年齢 |
-| gender | text | 性別（male / female / other） |
-| avatar_url | text | プロフィール画像URL |
-| created_at | timestamptz | 作成日時 |
-| updated_at | timestamptz | 更新日時 |
+```
+users/{uid}
+├── nickname: string        // ニックネーム
+├── bio: string             // 自己紹介
+├── age: number             // 年齢
+├── gender: string          // 性別（male / female / other）
+├── avatarUrl: string       // プロフィール画像URL
+├── createdAt: timestamp    // 作成日時
+└── updatedAt: timestamp    // 更新日時
+```
 
-### likes テーブル
+### likes コレクション
 
-| カラム | 型 | 説明 |
-|--------|------|------|
-| id | uuid (PK) | |
-| from_user_id | uuid (FK) | いいねした側の user id |
-| to_user_id | uuid (FK) | いいねされた側の user id |
-| created_at | timestamptz | いいね日時 |
+```
+likes/{likeId}
+├── fromUserId: string      // いいねした側の uid
+├── toUserId: string        // いいねされた側の uid
+└── createdAt: timestamp    // いいね日時
+```
 
-- ユニーク制約: (from_user_id, to_user_id)
+### matches コレクション
 
-### matches テーブル
+```
+matches/{matchId}
+├── userIds: string[]       // マッチしたユーザー2人の uid 配列
+├── user1Id: string         // ユーザー1の uid
+├── user2Id: string         // ユーザー2の uid
+└── createdAt: timestamp    // マッチ成立日時
+```
 
-| カラム | 型 | 説明 |
-|--------|------|------|
-| id | uuid (PK) | |
-| user1_id | uuid (FK) | マッチしたユーザー1 |
-| user2_id | uuid (FK) | マッチしたユーザー2 |
-| created_at | timestamptz | マッチ成立日時 |
+### messages サブコレクション
 
-- ユニーク制約: (user1_id, user2_id)
-- user1_id < user2_id の順序で格納（重複防止）
-
-### messages テーブル
-
-| カラム | 型 | 説明 |
-|--------|------|------|
-| id | uuid (PK) | |
-| match_id | uuid (FK) | 対応するマッチ |
-| sender_id | uuid (FK) | 送信者の user id |
-| content | text | メッセージ本文 |
-| is_read | boolean | 既読フラグ |
-| created_at | timestamptz | 送信日時 |
+```
+matches/{matchId}/messages/{messageId}
+├── senderId: string        // 送信者の uid
+├── content: string         // メッセージ本文
+├── isRead: boolean         // 既読フラグ
+└── createdAt: timestamp    // 送信日時
+```
 
 ---
 
@@ -135,9 +130,9 @@
 
 ---
 
-## RLS（Row Level Security）ポリシー
+## Firestore セキュリティルール
 
-- **profiles**: 誰でも閲覧可能、本人のみ編集可能
+- **users**: 誰でも閲覧可能、本人のみ編集可能
 - **likes**: 本人が送ったいいねの作成・閲覧、自分宛てのいいねの閲覧
 - **matches**: マッチした当事者のみ閲覧可能
 - **messages**: マッチした当事者のみ送信・閲覧可能
