@@ -15,10 +15,12 @@ import { db } from "@/lib/firebase";
 import Link from "next/link";
 import type { UserProfile } from "@/types/user";
 
+type MatchedUser = UserProfile & { matchId: string };
+
 export default function MatchesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [matchedUsers, setMatchedUsers] = useState<UserProfile[]>([]);
+  const [matchedUsers, setMatchedUsers] = useState<MatchedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,29 +38,33 @@ export default function MatchesPage() {
         );
         const matchesSnapshot = await getDocs(matchesQuery);
 
-        const partnerIds = matchesSnapshot.docs.map((d) => {
-          const data = d.data();
-          return data.user1Id === user.uid ? data.user2Id : data.user1Id;
-        });
-
         const profiles = await Promise.all(
-          partnerIds.map(async (uid: string) => {
-            const docSnap = await getDoc(doc(db, "users", uid));
+          matchesSnapshot.docs.map(async (matchDoc) => {
+            const matchData = matchDoc.data();
+            const partnerId =
+              matchData.user1Id === user.uid
+                ? matchData.user2Id
+                : matchData.user1Id;
+
+            const docSnap = await getDoc(doc(db, "users", partnerId));
             if (!docSnap.exists()) return null;
             const data = docSnap.data();
             return {
-              uid,
+              uid: partnerId,
+              matchId: matchDoc.id,
               nickname: data.nickname,
               bio: data.bio,
               age: data.age,
               gender: data.gender,
               createdAt: data.createdAt?.toDate(),
               updatedAt: data.updatedAt?.toDate(),
-            } as UserProfile;
+            } as MatchedUser;
           })
         );
 
-        setMatchedUsers(profiles.filter((p): p is UserProfile => p !== null));
+        setMatchedUsers(
+          profiles.filter((p): p is MatchedUser => p !== null)
+        );
       } catch (err) {
         console.error("マッチ一覧取得エラー:", err);
       } finally {
@@ -99,21 +105,31 @@ export default function MatchesPage() {
             { male: "男性", female: "女性", other: "その他" }[u.gender] ||
             u.gender;
           return (
-            <Link
+            <div
               key={u.uid}
-              href={`/profile/${u.uid}`}
-              className="flex items-center gap-4 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50"
+              className="flex items-center gap-4 rounded-lg border border-gray-200 p-4"
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pink-100 text-2xl">
-                💗
-              </div>
-              <div className="flex-1">
-                <p className="font-bold">{u.nickname}</p>
-                <p className="text-sm text-gray-500">
-                  {u.age}歳 / {genderLabel}
-                </p>
-              </div>
-            </Link>
+              <Link
+                href={`/profile/${u.uid}`}
+                className="flex flex-1 items-center gap-4"
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pink-100 text-2xl">
+                  💗
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">{u.nickname}</p>
+                  <p className="text-sm text-gray-500">
+                    {u.age}歳 / {genderLabel}
+                  </p>
+                </div>
+              </Link>
+              <Link
+                href={`/messages/${u.matchId}`}
+                className="rounded-full bg-pink-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-pink-600"
+              >
+                💬 トーク
+              </Link>
+            </div>
           );
         })}
       </div>
