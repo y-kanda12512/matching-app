@@ -26,11 +26,8 @@ export default function ProfileEditPage() {
 
     const fetchProfile = async () => {
       try {
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("タイムアウト")), 10000)
-        );
         const docRef = doc(db, "users", user.uid);
-        const docSnap = await Promise.race([getDoc(docRef), timeout]) as Awaited<ReturnType<typeof getDoc>>;
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           setNickname(data.nickname || "");
@@ -40,7 +37,7 @@ export default function ProfileEditPage() {
         }
       } catch (err) {
         console.error("プロフィール取得エラー:", err);
-        setError("プロフィールの取得に失敗しました。Firestoreが有効か確認してください。");
+        setError("プロフィールの取得に失敗しました");
       } finally {
         setLoading(false);
       }
