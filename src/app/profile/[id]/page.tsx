@@ -29,6 +29,7 @@ export default function ProfilePage({
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [liking, setLiking] = useState(false);
+  const [matched, setMatched] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -82,6 +83,36 @@ export default function ProfilePage({
         createdAt: serverTimestamp(),
       });
       setIsLiked(true);
+
+      // 相互いいねチェック
+      const reverseQuery = query(
+        collection(db, "likes"),
+        where("fromUserId", "==", id),
+        where("toUserId", "==", user.uid)
+      );
+      const reverseSnapshot = await getDocs(reverseQuery);
+
+      if (!reverseSnapshot.empty) {
+        const [uid1, uid2] =
+          user.uid < id ? [user.uid, id] : [id, user.uid];
+
+        const matchQuery = query(
+          collection(db, "matches"),
+          where("user1Id", "==", uid1),
+          where("user2Id", "==", uid2)
+        );
+        const matchSnapshot = await getDocs(matchQuery);
+
+        if (matchSnapshot.empty) {
+          await addDoc(collection(db, "matches"), {
+            user1Id: uid1,
+            user2Id: uid2,
+            userIds: [uid1, uid2],
+            createdAt: serverTimestamp(),
+          });
+          setMatched(true);
+        }
+      }
     } catch (err) {
       console.error("いいねエラー:", err);
     } finally {
@@ -114,6 +145,25 @@ export default function ProfilePage({
 
   return (
     <div className="space-y-6">
+      {matched && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 text-center">
+            <p className="mb-2 text-4xl">🎉</p>
+            <h2 className="mb-2 text-xl font-bold text-pink-500">
+              マッチング成立！
+            </h2>
+            <p className="mb-4 text-gray-600">
+              {profile.nickname}さんとマッチしました！
+            </p>
+            <button
+              onClick={() => setMatched(false)}
+              className="w-full rounded-lg bg-pink-500 py-2 font-medium text-white hover:bg-pink-600"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col items-center gap-4">
         <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-gray-200 text-4xl text-gray-400">
           👤

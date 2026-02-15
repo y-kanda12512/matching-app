@@ -72,6 +72,8 @@ export default function Home() {
     fetchData();
   }, [user, authLoading, router]);
 
+  const [matchedUserId, setMatchedUserId] = useState<string | null>(null);
+
   const handleLike = async (toUserId: string) => {
     if (!user || likedUserIds.has(toUserId)) return;
 
@@ -82,6 +84,39 @@ export default function Home() {
         createdAt: serverTimestamp(),
       });
       setLikedUserIds((prev) => new Set(prev).add(toUserId));
+
+      // 相互いいねチェック
+      const reverseQuery = query(
+        collection(db, "likes"),
+        where("fromUserId", "==", toUserId),
+        where("toUserId", "==", user.uid)
+      );
+      const reverseSnapshot = await getDocs(reverseQuery);
+
+      if (!reverseSnapshot.empty) {
+        const [uid1, uid2] =
+          user.uid < toUserId
+            ? [user.uid, toUserId]
+            : [toUserId, user.uid];
+
+        // 既存マッチ確認
+        const matchQuery = query(
+          collection(db, "matches"),
+          where("user1Id", "==", uid1),
+          where("user2Id", "==", uid2)
+        );
+        const matchSnapshot = await getDocs(matchQuery);
+
+        if (matchSnapshot.empty) {
+          await addDoc(collection(db, "matches"), {
+            user1Id: uid1,
+            user2Id: uid2,
+            userIds: [uid1, uid2],
+            createdAt: serverTimestamp(),
+          });
+          setMatchedUserId(toUserId);
+        }
+      }
     } catch (err) {
       console.error("いいねエラー:", err);
     }
@@ -105,8 +140,31 @@ export default function Home() {
     );
   }
 
+  const matchedUser = matchedUserId
+    ? users.find((u) => u.uid === matchedUserId)
+    : null;
+
   return (
     <div className="space-y-4">
+      {matchedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 text-center">
+            <p className="mb-2 text-4xl">🎉</p>
+            <h2 className="mb-2 text-xl font-bold text-pink-500">
+              マッチング成立！
+            </h2>
+            <p className="mb-4 text-gray-600">
+              {matchedUser.nickname}さんとマッチしました！
+            </p>
+            <button
+              onClick={() => setMatchedUserId(null)}
+              className="w-full rounded-lg bg-pink-500 py-2 font-medium text-white hover:bg-pink-600"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <h1 className="text-xl font-bold">ユーザー一覧</h1>
       <div className="space-y-3">
         {users.map((u) => {
