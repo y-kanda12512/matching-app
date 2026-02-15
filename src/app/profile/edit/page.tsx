@@ -25,16 +25,25 @@ export default function ProfileEditPage() {
     if (!user) return;
 
     const fetchProfile = async () => {
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setNickname(data.nickname || "");
-        setBio(data.bio || "");
-        setAge(data.age?.toString() || "");
-        setGender(data.gender || "");
+      try {
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("タイムアウト")), 10000)
+        );
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await Promise.race([getDoc(docRef), timeout]) as Awaited<ReturnType<typeof getDoc>>;
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setNickname(data.nickname || "");
+          setBio(data.bio || "");
+          setAge(data.age?.toString() || "");
+          setGender(data.gender || "");
+        }
+      } catch (err) {
+        console.error("プロフィール取得エラー:", err);
+        setError("プロフィールの取得に失敗しました。Firestoreが有効か確認してください。");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchProfile();
   }, [user, authLoading, router]);
