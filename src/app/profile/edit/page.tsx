@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProfileEditPage() {
@@ -14,9 +13,6 @@ export default function ProfileEditPage() {
   const [bio, setBio] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -37,19 +33,11 @@ export default function ProfileEditPage() {
         setBio(data.bio || "");
         setAge(data.age?.toString() || "");
         setGender(data.gender || "");
-        setAvatarUrl(data.avatarUrl || "");
       }
       setLoading(false);
     };
     fetchProfile();
   }, [user, authLoading, router]);
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,14 +59,6 @@ export default function ProfileEditPage() {
 
     setSaving(true);
     try {
-      let uploadedAvatarUrl = avatarUrl;
-
-      if (avatarFile) {
-        const storageRef = ref(storage, `avatars/${user.uid}`);
-        await uploadBytes(storageRef, avatarFile);
-        uploadedAvatarUrl = await getDownloadURL(storageRef);
-      }
-
       const docRef = doc(db, "users", user.uid);
       const docSnap = await getDoc(docRef);
 
@@ -87,7 +67,6 @@ export default function ProfileEditPage() {
         bio: bio.trim(),
         age: Number(age),
         gender,
-        avatarUrl: uploadedAvatarUrl,
         updatedAt: serverTimestamp(),
         ...(!docSnap.exists() && { createdAt: serverTimestamp() }),
       });
@@ -110,8 +89,6 @@ export default function ProfileEditPage() {
 
   if (!user) return null;
 
-  const displayAvatar = avatarPreview || avatarUrl;
-
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">プロフィール編集</h1>
@@ -122,31 +99,6 @@ export default function ProfileEditPage() {
             {error}
           </div>
         )}
-
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-24 w-24 overflow-hidden rounded-full bg-gray-200">
-            {displayAvatar ? (
-              <img
-                src={displayAvatar}
-                alt="プロフィール画像"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-3xl text-gray-400">
-                👤
-              </div>
-            )}
-          </div>
-          <label className="cursor-pointer rounded-lg border border-pink-500 px-4 py-1 text-sm text-pink-500 hover:bg-pink-50">
-            画像を選択
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarChange}
-              className="hidden"
-            />
-          </label>
-        </div>
 
         <div>
           <label htmlFor="nickname" className="block text-sm font-medium text-gray-700">
